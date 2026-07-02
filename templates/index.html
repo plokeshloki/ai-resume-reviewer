@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI Resume Reviewer</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    max-width: 640px;
+    margin: 50px auto;
+    padding: 0 20px;
+    background: #f7f7f8;
+    color: #1a1a1a;
+  }
+  h1 { font-size: 24px; margin-bottom: 4px; }
+  p.subtitle { color: #666; margin-top: 0; margin-bottom: 30px; }
+  .card {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    margin-bottom: 20px;
+  }
+  label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 14px; }
+  input[type="file"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px dashed #ccc;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    background: #fafafa;
+  }
+  textarea {
+    width: 100%;
+    height: 140px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+    margin-bottom: 20px;
+  }
+  button {
+    background: #d97757;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+  }
+  button:hover { background: #c4664a; }
+  button:disabled { background: #ccc; cursor: not-allowed; }
+
+  #results { display: none; }
+  .score-circle {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    font-weight: 700;
+    color: white;
+    margin: 0 auto 16px auto;
+  }
+  .score-label { text-align: center; color: #666; font-size: 14px; margin-bottom: 20px;}
+  .keywords { display: flex; flex-wrap: wrap; gap: 8px; }
+  .keyword {
+    background: #fff0eb;
+    color: #b5502f;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  #error {
+    color: #c0392b;
+    background: #fdecea;
+    padding: 10px 14px;
+    border-radius: 8px;
+    display: none;
+    margin-bottom: 16px;
+    font-size: 14px;
+  }
+  #loading { display: none; text-align: center; color: #666; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+
+  <h1>AI Resume Reviewer</h1>
+  <p class="subtitle">Upload your resume and a job description to see your match score and missing keywords.</p>
+
+  <div class="card">
+    <form id="reviewForm">
+      <label for="resume">Resume (PDF)</label>
+      <input type="file" id="resume" name="resume" accept=".pdf" required>
+
+      <label for="job_description">Job Description</label>
+      <textarea id="job_description" name="job_description" placeholder="Paste the job description here..." required></textarea>
+
+      <button type="submit" id="submitBtn">Analyze Resume</button>
+    </form>
+  </div>
+
+  <div id="error"></div>
+  <div id="loading">Analyzing your resume...</div>
+
+  <div class="card" id="results">
+    <div class="score-circle" id="scoreCircle"></div>
+    <div class="score-label" id="scoreLabel"></div>
+    <label>Keywords from the job description missing in your resume:</label>
+    <div class="keywords" id="keywords"></div>
+  </div>
+
+<script>
+const form = document.getElementById("reviewForm");
+const submitBtn = document.getElementById("submitBtn");
+const errorBox = document.getElementById("error");
+const loadingBox = document.getElementById("loading");
+const resultsBox = document.getElementById("results");
+
+form.addEventListener("submit", async function(e) {
+  e.preventDefault(); // stop the page from reloading (default form behavior)
+
+  // Reset UI state
+  errorBox.style.display = "none";
+  resultsBox.style.display = "none";
+  loadingBox.style.display = "block";
+  submitBtn.disabled = true;
+
+  // Package up the form data (file + text) to send to Flask
+  const formData = new FormData(form);
+
+  try {
+    const response = await fetch("/analyze", {
+      method: "POST",
+      body: formData
+    });
+    const data = await response.json();
+
+    loadingBox.style.display = "none";
+    submitBtn.disabled = false;
+
+    if (data.error) {
+      errorBox.textContent = data.error;
+      errorBox.style.display = "block";
+      return;
+    }
+
+    // Show the score
+    const score = data.score;
+    const circle = document.getElementById("scoreCircle");
+    circle.textContent = score + "%";
+    circle.style.background = score >= 70 ? "#2e7d32" : score >= 40 ? "#e6a817" : "#c0392b";
+
+    document.getElementById("scoreLabel").textContent =
+      score >= 70 ? "Strong match!" : score >= 40 ? "Decent match - room to improve" : "Weak match - consider revising";
+
+    // Show missing keywords as little tags
+    const keywordsDiv = document.getElementById("keywords");
+    keywordsDiv.innerHTML = "";
+    if (data.missing_keywords.length === 0) {
+      keywordsDiv.textContent = "No major keywords missing. Nice!";
+    } else {
+      data.missing_keywords.forEach(function(word) {
+        const span = document.createElement("span");
+        span.className = "keyword";
+        span.textContent = word;
+        keywordsDiv.appendChild(span);
+      });
+    }
+
+    resultsBox.style.display = "block";
+
+  } catch (err) {
+    loadingBox.style.display = "none";
+    submitBtn.disabled = false;
+    errorBox.textContent = "Something went wrong. Please try again.";
+    errorBox.style.display = "block";
+  }
+});
+</script>
+
+</body>
+</html>
